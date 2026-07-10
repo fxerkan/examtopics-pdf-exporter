@@ -1,5 +1,8 @@
 # ExamTopics PDF Exporter
 
+> 💸 **Don't pay ExamTopics \$139.99 for their "Purchase PDF" feature.**
+> Use this script instead — and if it saved you a hundred bucks, [buy me a \$1 coffee ☕](https://buymeacoffee.com/fxerkan).
+
 Turn any ExamTopics exam page into a single, clean, merged **PDF** — with the
 "Reveal Solution" answer boxes already open — in one command.
 
@@ -167,6 +170,11 @@ verify the custom-view page still has a `<input type="range">`.
   while Chrome runs. The dedicated automation profile solves it with zero pain.
 
 ---
+
+## Support
+
+If this saved you the \$139.99 ExamTopics wants for their PDF —
+[buy me a \$1 coffee ☕](https://buymeacoffee.com/fxerkan). That's 0.7% of the ask.
 
 ## License
 
