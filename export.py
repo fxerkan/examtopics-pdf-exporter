@@ -3,19 +3,41 @@
 Reuses your Chrome profile for cookies. Renders each question page to PDF via
 Playwright's built-in `page.pdf()`, then merges into ALL.pdf and drops empty pages.
 """
-import argparse, asyncio, logging, pathlib, re, sys, tempfile
+import argparse, asyncio, logging, pathlib, re, subprocess, sys, tempfile
+
+
+def _ensure_deps():
+    req = pathlib.Path(__file__).parent / "requirements.txt"
+    try:
+        import playwright, pypdf, tqdm  # noqa: F401
+    except ImportError:
+        print("Installing Python dependencies...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "-r", str(req)])
+    try:
+        from playwright.async_api import async_playwright  # noqa: F401
+        # ponytail: chromium install is idempotent and fast when already present
+        subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium"],
+                              stdout=subprocess.DEVNULL)
+    except Exception as e:
+        print(f"Playwright browser install failed: {e}", file=sys.stderr); raise
+
+
+_ensure_deps()
+
 from playwright.async_api import async_playwright
 from pypdf import PdfReader, PdfWriter
 from tqdm import tqdm
 
-DEFAULT_URL = "https://www.examtopics.com/exams/amazon/aws-certified-cloud-practitioner-clf-c02"
 PROFILE = pathlib.Path.home() / "Library/Application Support/Google/Chrome/ClaudeAutomation"
 
 REVEAL_JS = r"""
-document.querySelectorAll('.reveal-solution').forEach(b => b.style.display = 'none');
-document.querySelectorAll(
-  '.question-answer, .correct-answer-box, .answer-description, .question-answer-block, .answer-hidden'
-).forEach(e => { e.style.display = 'block'; e.hidden = false; e.removeAttribute('hidden'); });
+(reveal) => {
+if (reveal) {
+  document.querySelectorAll('.reveal-solution').forEach(b => b.style.display = 'none');
+  document.querySelectorAll(
+    '.question-answer, .correct-answer-box, .answer-description, .question-answer-block, .answer-hidden'
+  ).forEach(e => { e.style.display = 'block'; e.hidden = false; e.removeAttribute('hidden'); });
+}
 const f = document.getElementById('rs-footer'); if (f) f.style.visibility = 'hidden';
 ['#scrollUp', '.full-width-header']
   .forEach(sel => document.querySelectorAll(sel).forEach(e => e.remove()));
@@ -29,6 +51,7 @@ css.textContent = `
   .question-answer-block, .answer-hidden { display: block !important; }
 `;
 document.head.appendChild(css);
+}
 """
 
 SET_QPP_JS = """
@@ -108,7 +131,7 @@ async def run(args):
                 log.error(f"page {i} no content: {e} url={page.url}")
                 break
 
-            await page.evaluate(REVEAL_JS)
+            await page.evaluate(REVEAL_JS, not args.hide_answers)
             await page.wait_for_timeout(800)
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
             await page.wait_for_timeout(400)
@@ -187,15 +210,19 @@ def parse_args():
 """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    ap.add_argument("--url", default=DEFAULT_URL, help="Exam base URL (up to the /view/ segment).")
+    ap.add_argument("--url", help="Exam base URL (e.g. https://www.examtopics.com/exams/amazon/<exam-slug>). Prompted if omitted.")
     ap.add_argument("--qpp", type=int, default=50, help="Questions per page, 15..50 (default: 50).")
     ap.add_argument("--max-pages", type=int, default=9999, help="Cap number of pages exported.")
     ap.add_argument("--headed", action="store_true", help="Show browser (needed for first-time login).")
     ap.add_argument("--out-dir", help="Output directory (default: ~/Downloads/<exam-slug>).")
     ap.add_argument("--keep-pages", action="store_true", help="Keep per-page PDF files.")
     ap.add_argument("--keep-png", action="store_true", help="Also save a PNG screenshot per page.")
+    ap.add_argument("--hide-answers", action="store_true",
+                    help="Do not reveal solutions (export with answers hidden).")
     a = ap.parse_args()
     assert 15 <= a.qpp <= 50, "qpp must be 15..50"
+    while not a.url:
+        a.url = input("Exam base URL: ").strip()
     return a
 
 

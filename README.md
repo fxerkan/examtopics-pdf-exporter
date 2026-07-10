@@ -71,7 +71,7 @@ python export.py [--url URL] [--qpp N] [--max-pages N]
 
 | Flag           | Default                        | What it does                                             |
 | -------------- | ------------------------------ | -------------------------------------------------------- |
-| `--url`        | AWS CLF-C02                    | Exam base URL (up to the exam slug).                     |
+| `--url`        | *(prompted)*                   | Exam base URL. Required — asked in the terminal if omitted. |
 | `--qpp`        | `50`                           | Questions per page, 15–50. Sets via the site's slider.   |
 | `--max-pages`  | `9999`                         | Cap number of pages exported (useful for testing).       |
 | `--headed`     | off                            | Show the browser — required for first-time login.        |
@@ -87,10 +87,13 @@ Run `python export.py --help` for the full help screen.
 ## Examples
 
 ```bash
-# Default: AWS Cloud Practitioner, 50 q/page, headless
+# No URL passed → prompted in the terminal
 python export.py
 
-# Different exam
+# Explicit URL, e.g. AWS Cloud Practitioner
+python export.py --url https://www.examtopics.com/exams/amazon/aws-certified-cloud-practitioner-clf-c02
+
+# A different exam, e.g. Solutions Architect Associate
 python export.py --url https://www.examtopics.com/exams/amazon/aws-certified-solutions-architect-associate-saa-c03
 
 # Quick smoke test (3 pages, keep artifacts for inspection)
