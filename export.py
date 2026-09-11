@@ -66,8 +66,40 @@ SET_QPP_JS = """
 }
 """
 
+SET_RANGE_JS = """
+([from, to]) => {
+  const setVal = (el, v) => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(el, String(v));
+    el.dispatchEvent(new Event('input', {bubbles: true}));
+    el.dispatchEvent(new Event('change', {bubbles: true}));
+  };
+  // ponytail: match the checkbox by its label text, then reveal + set From/To
+  const cb = [...document.querySelectorAll('input[type=checkbox]')].find(c =>
+    (c.closest('label') || c.parentElement || {}).textContent?.match(/specific range/i));
+  if (!cb) return false;
+  if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change', {bubbles: true})); }
+  const nums = [...document.querySelectorAll('input[type=number]')];
+  if (nums.length < 2) return false;
+  setVal(nums[0], from);
+  setVal(nums[1], to);
+  return true;
+}
+"""
+
 NEXT_SEL = 'a.btn.btn-success:has-text("Next Questions"), a:has-text("Next Questions")'
 log = logging.getLogger("examtopics")
+
+
+def uniq_dir(path: pathlib.Path) -> pathlib.Path:
+    # ponytail: never clobber an existing export; add -1, -2, ... suffix
+    if not path.exists():
+        return path
+    for n in range(1, 10000):
+        cand = path.with_name(f"{path.name}-{n}")
+        if not cand.exists():
+            return cand
+    raise RuntimeError("too many existing export dirs")
 
 
 def slug_from_url(url: str) -> str:
@@ -85,6 +117,7 @@ async def run(args):
 
     slug = slug_from_url(base)
     out_dir = pathlib.Path(args.out_dir).expanduser() if args.out_dir else pathlib.Path.home() / "Downloads" / slug
+    out_dir = uniq_dir(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     PROFILE.mkdir(parents=True, exist_ok=True)
 
@@ -112,12 +145,18 @@ async def run(args):
             await asyncio.get_event_loop().run_in_executor(None, input)
 
         await page.goto(custom_url, wait_until="domcontentloaded")
-        if await page.evaluate(SET_QPP_JS, args.qpp):
+        qpp_ok = await page.evaluate(SET_QPP_JS, args.qpp)
+        if not qpp_ok:
+            log.warning("qpp slider not found; continuing with site default")
+        if args.from_q and args.to_q:
+            if await page.evaluate(SET_RANGE_JS, [args.from_q, args.to_q]):
+                log.info(f"session range set to {args.from_q}..{args.to_q}")
+            else:
+                log.warning("range inputs not found; exporting full exam")
+        if qpp_ok or (args.from_q and args.to_q):
             await page.get_by_role("button", name=re.compile("Set Session Settings", re.I)).click()
             await page.wait_for_load_state("domcontentloaded")
             log.info(f"session qpp set to {args.qpp}")
-        else:
-            log.warning("qpp slider not found; continuing with site default")
 
         await page.goto(start_url, wait_until="domcontentloaded")
 
@@ -219,8 +258,12 @@ def parse_args():
     ap.add_argument("--keep-png", action="store_true", help="Also save a PNG screenshot per page.")
     ap.add_argument("--hide-answers", action="store_true",
                     help="Do not reveal solutions (export with answers hidden).")
+    ap.add_argument("--from-q", type=int, help="First question number of range (needs --to-q).")
+    ap.add_argument("--to-q", type=int, help="Last question number of range (needs --from-q).")
     a = ap.parse_args()
     assert 15 <= a.qpp <= 50, "qpp must be 15..50"
+    assert bool(a.from_q) == bool(a.to_q), "--from-q and --to-q must be used together"
+    assert not a.from_q or a.from_q <= a.to_q, "--from-q must be <= --to-q"
     while not a.url:
         a.url = input("Exam base URL: ").strip()
     return a
