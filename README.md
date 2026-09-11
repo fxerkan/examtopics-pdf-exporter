@@ -21,6 +21,8 @@ your own logged-in Chrome session.
 - **One command, one PDF.** Per-question PDFs are merged into `<exam-slug>.pdf` and cleaned up.
 - **Answers already revealed** in the output — no clicking required.
 - **Session settings automation.** Sets *Questions Per Page* (15–50) via the site's slider.
+- **Question-range export.** Export only a slice, e.g. questions 1001–1019, via `--from-q`/`--to-q` (drives the site's "Show only specific range" option).
+- **Never overwrites.** If the output folder already exists, a fresh `<slug>-1`, `-2`, … is created instead of clobbering a previous export.
 - **Cookie reuse.** First run headed to log in; every next run headless.
 - **Empty-page filter.** Blank pages are dropped during merge.
 - **Progress bar** with live question counter (`tqdm`).
@@ -68,6 +70,7 @@ Runs silently, shows a progress bar, drops the merged PDF into `~/Downloads/<exa
 
 ```
 python export.py [--url URL] [--qpp N] [--max-pages N]
+                 [--from-q N] [--to-q N]
                  [--headed] [--out-dir DIR]
                  [--keep-pages] [--keep-png]
 ```
@@ -76,12 +79,16 @@ python export.py [--url URL] [--qpp N] [--max-pages N]
 | -------------- | ------------------------------ | -------------------------------------------------------- |
 | `--url`        | *(prompted)*                   | Exam base URL. Required — asked in the terminal if omitted. |
 | `--qpp`        | `50`                           | Questions per page, 15–50. Sets via the site's slider.   |
+| `--from-q`     | *(all)*                        | First question number to export. Use with `--to-q`.      |
+| `--to-q`       | *(all)*                        | Last question number to export. Use with `--from-q`.     |
 | `--max-pages`  | `9999`                         | Cap number of pages exported (useful for testing).       |
 | `--headed`     | off                            | Show the browser — required for first-time login.        |
-| `--out-dir`    | `~/Downloads/<exam-slug>`      | Output directory.                                        |
+| `--out-dir`    | `~/Downloads/<exam-slug>`      | Output directory. Auto-suffixed if it already exists.    |
 | `--keep-pages` | off                            | Keep per-page PDF files after merge.                     |
 | `--keep-png`   | off                            | Also save a full-page PNG per page.                      |
 | `--help`       |                                | Show all options.                                        |
+
+`--from-q` and `--to-q` must be used together, with `--from-q <= --to-q`.
 
 Run `python export.py --help` for the full help screen.
 
@@ -98,6 +105,9 @@ python export.py --url https://www.examtopics.com/exams/amazon/aws-certified-clo
 
 # A different exam, e.g. Solutions Architect Associate
 python export.py --url https://www.examtopics.com/exams/amazon/aws-certified-solutions-architect-associate-saa-c03
+
+# Only a specific question range, e.g. 1001–1019
+python export.py --url https://www.examtopics.com/exams/amazon/aws-certified-solutions-architect-associate-saa-c03 --from-q 1001 --to-q 1019
 
 # Quick smoke test (3 pages, keep artifacts for inspection)
 python export.py --headed --max-pages 3 --keep-pages --keep-png
@@ -122,8 +132,9 @@ With `--keep-pages` a `pages/` sub-folder is preserved with `page_0001.pdf`, `pa
 
 ## How it works
 
-1. Opens `custom-view/`, moves the *Questions Per Page* range slider to `--qpp`,
-   submits **Set Session Settings**.
+1. Opens `custom-view/`, moves the *Questions Per Page* range slider to `--qpp`
+   (and, when `--from-q`/`--to-q` are given, ticks **Show only specific range of
+   questions** and fills From/To), submits **Set Session Settings**.
 2. Loads `view/1/`.
 3. On each question page:
    - Force-shows all answer panels (no click cascade — clicking the reveal
